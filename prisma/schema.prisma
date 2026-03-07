@@ -11,6 +11,5 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // connection URL is now specified in prisma.config.ts
-  // for migrate/cli. `url` is no longer supported here
+  url      = env("DATABASE_URL")
 }
