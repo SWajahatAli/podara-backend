@@ -1,15 +1,497 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// ============================================================
+// Podara — Production Grade Prisma Schema
+// Stack: Fastify + TypeScript + Prisma + Supabase PostgreSQL
+// ============================================================
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres"]
+  output          = "../generated/prisma"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Role {
+  LISTENER
+  CREATOR
+  ADMIN
+}
+
+enum EpisodeStatus {
+  UPLOADING      // file is being uploaded to R2
+  PROCESSING     // FFmpeg is transcoding
+  LIVE           // available for streaming
+  FAILED         // processing failed
+  DRAFT          // saved but not published
+  SCHEDULED      // to be published at a future date
+  ARCHIVED       // soft removed from public listing
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  PAST_DUE
+  INCOMPLETE
+  TRIALING
+  PAUSED
+}
+
+enum NotificationType {
+  NEW_EPISODE
+  NEW_SUBSCRIBER
+  PAYMENT_RECEIVED
+  PAYMENT_FAILED
+  SYSTEM
+}
+
+enum ReportReason {
+  SPAM
+  INAPPROPRIATE_CONTENT
+  COPYRIGHT_VIOLATION
+  HARASSMENT
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+}
+
+// ─────────────────────────────────────────────
+// USER — Base identity for all accounts
+// ─────────────────────────────────────────────
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  passwordHash   String
+  role           Role      @default(LISTENER)
+  isVerified     Boolean   @default(false)
+  isActive       Boolean   @default(true)
+  isBanned       Boolean   @default(false)
+  bannedAt       DateTime?
+  bannedReason   String?
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime? // soft delete
+
+  // Relations
+  creator        Creator?
+  listener       Listener?
+  refreshTokens  RefreshToken[]
+  notifications  Notification[]
+  reports        Report[]        @relation("ReportedBy")
+  adminActions   AdminAction[]
+
+  @@index([email])
+  @@index([role])
+  @@index([createdAt])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// REFRESH TOKEN — JWT refresh token management
+// ─────────────────────────────────────────────
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  userId      String
+  tokenHash   String    @unique  // store hash not raw token
+  deviceInfo  String?            // user agent / device
+  ipAddress   String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────────────────────────
+// EMAIL VERIFICATION
+// ─────────────────────────────────────────────
+
+model EmailVerification {
+  id        String    @id @default(uuid())
+  email     String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([token])
+  @@index([email])
+  @@map("email_verifications")
+}
+
+// ─────────────────────────────────────────────
+// PASSWORD RESET
+// ─────────────────────────────────────────────
+
+model PasswordReset {
+  id        String    @id @default(uuid())
+  email     String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([token])
+  @@map("password_resets")
+}
+
+// ─────────────────────────────────────────────
+// CREATOR — Extended profile for content creators
+// ─────────────────────────────────────────────
+
+model Creator {
+  id                    String    @id @default(uuid())
+  userId                String    @unique
+  displayName           String
+  slug                  String    @unique  // podara.io/creators/slug
+  bio                   String?
+  avatarUrl             String?
+  bannerUrl             String?
+  websiteUrl            String?
+  twitterHandle         String?
+  isVerified            Boolean   @default(false)  // blue tick
+  stripeAccountId       String?   @unique          // Stripe Connect
+  stripeOnboardingDone  Boolean   @default(false)
+  monthlyPrice          Decimal?  @db.Decimal(10, 2) // subscription price
+  currency              String    @default("usd")
+  totalEpisodes         Int       @default(0)       // denormalized counter
+  totalSubscribers      Int       @default(0)       // denormalized counter
+  totalPlays            Int       @default(0)       // denormalized counter
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relations
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episodes      Episode[]
+  subscriptions Subscription[]
+  payouts       Payout[]
+  categories    CreatorCategory[]
+
+  @@index([slug])
+  @@index([isVerified])
+  @@index([totalSubscribers])
+  @@index([createdAt])
+  @@map("creators")
+}
+
+// ─────────────────────────────────────────────
+// LISTENER — Extended profile for listeners
+// ─────────────────────────────────────────────
+
+model Listener {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  username  String?  @unique
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[]
+  plays         Play[]
+  bookmarks     Bookmark[]
+  queue         QueueItem[]
+
+  @@index([username])
+  @@map("listeners")
+}
+
+// ─────────────────────────────────────────────
+// CATEGORY — Podcast categories
+// ─────────────────────────────────────────────
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  slug      String   @unique
+  iconUrl   String?
+  createdAt DateTime @default(now())
+
+  creators  CreatorCategory[]
+  episodes  EpisodeCategory[]
+
+  @@map("categories")
+}
+
+model CreatorCategory {
+  creatorId  String
+  categoryId String
+
+  creator    Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([creatorId, categoryId])
+  @@map("creator_categories")
+}
+
+model EpisodeCategory {
+  episodeId  String
+  categoryId String
+
+  episode    Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([episodeId, categoryId])
+  @@map("episode_categories")
+}
+
+// ─────────────────────────────────────────────
+// EPISODE — Core content unit
+// ─────────────────────────────────────────────
+
+model Episode {
+  id               String        @id @default(uuid())
+  creatorId        String
+  title            String
+  slug             String                           // unique per creator
+  description      String?
+  showNotes        String?                          // rich text / markdown
+  audioUrl         String?                          // R2 raw audio
+  hlsManifestUrl   String?                          // R2 HLS manifest
+  hlsBaseUrl       String?                          // R2 HLS segments base
+  audioDurationMs  Int?
+  audioFileSizeBytes BigInt?
+  audioMimeType    String?
+  thumbnailUrl     String?                          // Supabase Storage
+  transcript       Json?                            // timestamped [{time, text}]
+  isPremium        Boolean       @default(false)
+  status           EpisodeStatus @default(UPLOADING)
+  processingError  String?                          // FFmpeg error message
+  publishedAt      DateTime?
+  scheduledAt      DateTime?
+  seasonNumber     Int?
+  episodeNumber    Int?
+  totalPlays       Int           @default(0)        // denormalized
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime?                        // soft delete
+
+  // Relations
+  creator     Creator           @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  plays       Play[]
+  bookmarks   Bookmark[]
+  queueItems  QueueItem[]
+  categories  EpisodeCategory[]
+  reports     Report[]          @relation("ReportedEpisode")
+
+  @@unique([creatorId, slug])
+  @@index([creatorId])
+  @@index([status])
+  @@index([isPremium])
+  @@index([publishedAt])
+  @@index([createdAt])
+  @@map("episodes")
+}
+
+// ─────────────────────────────────────────────
+// SUBSCRIPTION — Listener subscribes to Creator
+// ─────────────────────────────────────────────
+
+model Subscription {
+  id                   String             @id @default(uuid())
+  listenerId           String
+  creatorId            String
+  stripeSubscriptionId String?            @unique
+  stripeCustomerId     String?
+  status               SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelledAt          DateTime?
+  trialEndsAt          DateTime?
+  priceAtSubscription  Decimal?           @db.Decimal(10, 2)
+  currency             String             @default("usd")
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  listener Listener @relation(fields: [listenerId], references: [id], onDelete: Cascade)
+  creator  Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([listenerId, creatorId])
+  @@index([listenerId])
+  @@index([creatorId])
+  @@index([status])
+  @@index([currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+// ─────────────────────────────────────────────
+// PLAY — Analytics: every listen event
+// ─────────────────────────────────────────────
+
+model Play {
+  id               String   @id @default(uuid())
+  listenerId       String
+  episodeId        String
+  durationPlayedMs Int                           // how long they listened
+  completionRate   Float?                        // 0.0 to 1.0
+  ipAddress        String?
+  userAgent        String?
+  createdAt        DateTime @default(now())
+
+  listener Listener @relation(fields: [listenerId], references: [id], onDelete: Cascade)
+  episode  Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([listenerId])
+  @@index([episodeId])
+  @@index([createdAt])
+  @@map("plays")
+}
+
+// ─────────────────────────────────────────────
+// BOOKMARK — Listener saves an episode
+// ─────────────────────────────────────────────
+
+model Bookmark {
+  id         String   @id @default(uuid())
+  listenerId String
+  episodeId  String
+  createdAt  DateTime @default(now())
+
+  listener Listener @relation(fields: [listenerId], references: [id], onDelete: Cascade)
+  episode  Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([listenerId, episodeId])
+  @@index([listenerId])
+  @@map("bookmarks")
+}
+
+// ─────────────────────────────────────────────
+// QUEUE — Listener's personal play queue
+// ─────────────────────────────────────────────
+
+model QueueItem {
+  id         String   @id @default(uuid())
+  listenerId String
+  episodeId  String
+  position   Int                               // order in queue
+  createdAt  DateTime @default(now())
+
+  listener Listener @relation(fields: [listenerId], references: [id], onDelete: Cascade)
+  episode  Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([listenerId, episodeId])
+  @@index([listenerId, position])
+  @@map("queue_items")
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATION — In-app notifications
+// ─────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?            // flexible payload {episodeId, creatorId, etc}
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// ─────────────────────────────────────────────
+// PAYOUT — Creator earnings payouts via Stripe
+// ─────────────────────────────────────────────
+
+model Payout {
+  id                String       @id @default(uuid())
+  creatorId         String
+  stripePayoutId    String?      @unique
+  amount            Decimal      @db.Decimal(10, 2)
+  platformFee       Decimal      @db.Decimal(10, 2)  // our cut
+  netAmount         Decimal      @db.Decimal(10, 2)  // creator receives
+  currency          String       @default("usd")
+  status            PayoutStatus @default(PENDING)
+  periodStart       DateTime
+  periodEnd         DateTime
+  paidAt            DateTime?
+  failureReason     String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("payouts")
+}
+
+// ─────────────────────────────────────────────
+// REPORT — Content moderation reports
+// ─────────────────────────────────────────────
+
+model Report {
+  id           String       @id @default(uuid())
+  reportedById String
+  episodeId    String?
+  reason       ReportReason
+  description  String?
+  status       ReportStatus @default(PENDING)
+  reviewedAt   DateTime?
+  resolvedAt   DateTime?
+  createdAt    DateTime     @default(now())
+
+  reportedBy User     @relation("ReportedBy", fields: [reportedById], references: [id])
+  episode    Episode? @relation("ReportedEpisode", fields: [episodeId], references: [id])
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("reports")
+}
+
+// ─────────────────────────────────────────────
+// ADMIN ACTION — Audit log for admin operations
+// ─────────────────────────────────────────────
+
+model AdminAction {
+  id          String   @id @default(uuid())
+  adminId     String
+  action      String   // "BAN_USER", "REMOVE_EPISODE", etc.
+  targetType  String   // "USER", "EPISODE", "CREATOR"
+  targetId    String
+  reason      String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  admin User @relation(fields: [adminId], references: [id])
+
+  @@index([adminId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@map("admin_actions")
 }
