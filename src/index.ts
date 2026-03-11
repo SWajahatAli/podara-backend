@@ -1,11 +1,13 @@
 import "dotenv/config";
-import Fastify, { type FastifyError, type FastifyLoggerOptions } from "fastify";
+import Fastify, { type FastifyError } from "fastify";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import rateLimit from "@fastify/rate-limit";
 import { authRoutes } from "./modules/auth/auth.routes.js";
+import { registerSwagger } from "./shared/config/swagger.js";
 import fs from "fs";
 import path from "path";
+import type { PinoLoggerOptions } from "fastify/types/logger.js";
 
 // ─────────────────────────────────────────────────────────────
 // Podara — App Entry Point
@@ -21,57 +23,47 @@ if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
 // Development: pretty print to console
 // Production:  structured JSON to file + console
 
-const devLogger: FastifyLoggerOptions = {
+const devLogger: PinoLoggerOptions = {
   level: "debug",
-  // transport: {
-  //   targets: [
-  //     // Pretty print to console in dev
-  //     {
-  //       target: "pino-pretty",
-  //       level: "debug",
-  //       options: {
-  //         colorize: true,
-  //         translateTime: "SYS:yyyy-mm-dd HH:MM:ss",
-  //         ignore: "pid,hostname",
-  //       },
-  //     },
-  //     // Also write to file in dev
-  //     {
-  //       target: "pino/file",
-  //       level: "debug",
-  //       options: {
-  //         destination: path.join(logsDir, "dev.log"),
-  //         mkdir: true,
-  //       },
-  //     },
-  //   ],
-  // },
+  transport: {
+    targets: [
+      {
+        target: "pino-pretty",
+        level: "debug",
+        options: {
+          colorize: true,
+          translateTime: "SYS:yyyy-mm-dd HH:MM:ss",
+          ignore: "pid,hostname",
+        },
+      },
+      {
+        target: "pino/file",
+        level: "debug",
+        options: { destination: path.join(logsDir, "dev.log"), mkdir: true },
+      },
+    ],
+  },
 };
 
-const prodLogger: FastifyLoggerOptions = {
+const prodLogger: PinoLoggerOptions = {
   level: "warn",
-  // transport: {
-  //   targets: [
-  //     // Structured JSON logs for Railway log aggregation
-  //     {
-  //       target: "pino/file",
-  //       level: "warn",
-  //       options: {
-  //         destination: path.join(logsDir, "error.log"),
-  //         mkdir: true,
-  //       },
-  //     },
-  //     // Info level separate file for access logs
-  //     {
-  //       target: "pino/file",
-  //       level: "info",
-  //       options: {
-  //         destination: path.join(logsDir, "combined.log"),
-  //         mkdir: true,
-  //       },
-  //     },
-  //   ],
-  // },
+  transport: {
+    targets: [
+      {
+        target: "pino/file",
+        level: "warn",
+        options: { destination: path.join(logsDir, "error.log"), mkdir: true },
+      },
+      {
+        target: "pino/file",
+        level: "info",
+        options: {
+          destination: path.join(logsDir, "combined.log"),
+          mkdir: true,
+        },
+      },
+    ],
+  },
 };
 
 // ── Fastify Instance ──────────────────────────────────────────
@@ -79,12 +71,23 @@ const prodLogger: FastifyLoggerOptions = {
 const fastify = Fastify({
   logger: isProd ? prodLogger : devLogger,
   trustProxy: true, // Required for Railway — gets real IP behind proxy
+  ajv: {
+    customOptions: {
+      strict: "log", // warn instead of throw on unknown keywords
+      keywords: ["example"], // explicitly allow 'example' annotation
+    },
+  },
 });
 
 // ── Bootstrap ─────────────────────────────────────────────────
 
 const start = async () => {
   try {
+    // ── Swagger — must register BEFORE routes ──────────────────
+    if (!isProd) {
+      await registerSwagger(fastify);
+    }
+
     // ── Plugins ────────────────────────────────────────────────
 
     await fastify.register(cors, {
