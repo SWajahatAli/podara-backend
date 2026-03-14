@@ -1,5 +1,4 @@
-import { createHmac, randomBytes } from 'crypto'
-import type { JwtPayload } from '../types/index.js'
+import { createHmac, randomBytes } from "crypto";
 
 // ─────────────────────────────────────────────────────────────
 // Podara — JWT Utility
