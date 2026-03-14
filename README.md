@@ -12,20 +12,20 @@ Podara is a full-stack podcast platform where independent creators upload episod
 
 ## 🧱 Tech Stack
 
-| Layer | Technology | Purpose |
-|---|---|---|
-| Runtime | Node.js v22 + TypeScript 5.9 | Strongly typed server-side JavaScript |
-| Framework | Fastify v5 | High performance HTTP framework |
-| ORM | Prisma v6.19.2 | Type-safe database queries |
-| Database | Supabase PostgreSQL | Managed PostgreSQL with free tier |
-| Assets | Supabase Storage | Profile pics, thumbnails, cover art |
-| Audio | Cloudflare R2 | Audio files — zero egress fees |
-| Cache/Queue | Redis + BullMQ | Caching and async job processing |
-| Auth | JWT + Refresh Tokens | 15min access + 30day refresh rotation |
-| Payments | Stripe Connect | Creator monetization and payouts |
-| Hosting | Railway | Auto-deploy on git push |
-| Processing | FFmpeg + HLS | Adaptive bitrate audio streaming |
-| Transcripts | OpenAI Whisper | Auto-generated timestamped transcripts |
+| Layer       | Technology                   | Purpose                                |
+| ----------- | ---------------------------- | -------------------------------------- |
+| Runtime     | Node.js v22 + TypeScript 5.9 | Strongly typed server-side JavaScript  |
+| Framework   | Fastify v5                   | High performance HTTP framework        |
+| ORM         | Prisma v6.19.2               | Type-safe database queries             |
+| Database    | Supabase PostgreSQL          | Managed PostgreSQL with free tier      |
+| Assets      | Supabase Storage             | Profile pics, thumbnails, cover art    |
+| Audio       | Cloudflare R2                | Audio files — zero egress fees         |
+| Cache/Queue | Redis + BullMQ               | Caching and async job processing       |
+| Auth        | JWT + Refresh Tokens         | 15min access + 30day refresh rotation  |
+| Payments    | Stripe Connect               | Creator monetization and payouts       |
+| Hosting     | Railway                      | Auto-deploy on git push                |
+| Processing  | FFmpeg + HLS                 | Adaptive bitrate audio streaming       |
+| Transcripts | OpenAI Whisper               | Auto-generated timestamped transcripts |
 
 ---
 
@@ -109,14 +109,34 @@ Server runs at `http://localhost:3000`
 
 ## 📦 Available Scripts
 
-| Script | Description |
-|---|---|
-| `npm run dev` | Start development server with hot reload |
-| `npm run build` | Compile TypeScript to JavaScript |
-| `npm start` | Start production server |
-| `npx prisma studio` | Open Prisma database GUI |
-| `npx prisma migrate dev` | Run new database migrations |
-| `npx prisma generate` | Regenerate Prisma client after schema changes |
+| Script                | Description                                                                                                                             |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`         | Start the development server using TypeScript directly via `ts-node`. Useful for local development without compiling the project first. |
+| `npm run build`       | Clean the `dist` folder and compile TypeScript into JavaScript using the TypeScript compiler.                                           |
+| `npm start`           | Start the production server from the compiled JavaScript inside the `dist` directory.                                                   |
+| `npm run lint`        | Run the linter to analyze the codebase for potential issues and maintain code quality.                                                  |
+| `npm run lint:fix`    | Automatically fix linting issues where possible.                                                                                        |
+| `npm run format`      | Format the entire project using Prettier to maintain consistent code style.                                                             |
+| `npm run check`       | Run both linting and build checks to verify that the project is ready for production or CI pipelines.                                   |
+| `npm run db:generate` | Generate the Prisma client after changes to `schema.prisma`. This does **not** modify the database.                                     |
+| `npm run db:migrate`  | Create and apply new database migrations during development. Generates migration files and updates the database schema safely.          |
+| `npm run db:deploy`   | Apply existing migrations in production environments without resetting or deleting existing data.                                       |
+| `npm run db:studio`   | Open the Prisma database GUI to inspect and manage database records.                                                                    |
+| `npm run postinstall` | Automatically regenerate the Prisma client after installing dependencies.                                                               |
+
+---
+
+## 🗄 Database Workflow
+
+This project uses **Prisma migrations** to manage database schema changes safely.
+
+### Development Workflow
+
+When you update the Prisma schema:
+
+```bash
+npm run db:migrate
+```
 
 ---
 
@@ -156,14 +176,14 @@ podara-backend/
 
 ### Auth — `/api/v1/auth`
 
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| `POST` | `/api/v1/auth/register` | Public | Register as LISTENER, CREATOR, or ADMIN |
-| `POST` | `/api/v1/auth/login` | Public | Login and receive token pair |
-| `POST` | `/api/v1/auth/refresh` | Public | Rotate refresh token |
-| `POST` | `/api/v1/auth/logout` | Protected | Revoke current refresh token |
-| `POST` | `/api/v1/auth/logout-all` | Protected | Revoke all device sessions |
-| `GET` | `/api/v1/auth/me` | Protected | Get current user profile |
+| Method | Endpoint                  | Auth      | Description                             |
+| ------ | ------------------------- | --------- | --------------------------------------- |
+| `POST` | `/api/v1/auth/register`   | Public    | Register as LISTENER, CREATOR, or ADMIN |
+| `POST` | `/api/v1/auth/login`      | Public    | Login and receive token pair            |
+| `POST` | `/api/v1/auth/refresh`    | Public    | Rotate refresh token                    |
+| `POST` | `/api/v1/auth/logout`     | Protected | Revoke current refresh token            |
+| `POST` | `/api/v1/auth/logout-all` | Protected | Revoke all device sessions              |
+| `GET`  | `/api/v1/auth/me`         | Protected | Get current user profile                |
 
 ---
 
@@ -191,6 +211,7 @@ git push origin main  # ← Railway auto-deploys
 Deployed on [Railway](https://railway.app). Every push to `main` triggers automatic redeployment.
 
 Add all environment variables under:
+
 ```
 Railway Dashboard → Your Project → Variables
 ```
