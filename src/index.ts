@@ -1,14 +1,14 @@
-import "dotenv/config";
-import Fastify, { type FastifyError } from "fastify";
-import cors from "@fastify/cors";
-import jwt from "@fastify/jwt";
-import rateLimit from "@fastify/rate-limit";
-import { authRoutes } from "./modules/auth/auth.routes.js";
-import fs from "fs";
-import path from "path";
-import type { PinoLoggerOptions } from "fastify/types/logger.js";
-import httpLogger from "./plugins/request.logger.js";
-import { devLogger, prodLogger } from "./shared/config/logger.js";
+import 'dotenv/config'
+import Fastify, { type FastifyError } from 'fastify'
+import cors from '@fastify/cors'
+import jwt from '@fastify/jwt'
+import rateLimit from '@fastify/rate-limit'
+import { authRoutes } from './modules/auth/auth.routes.js'
+import fs from 'fs'
+import path from 'path'
+import type { PinoLoggerOptions } from 'fastify/types/logger.js'
+import httpLogger from './plugins/request.logger.js'
+import { devLogger, prodLogger } from './shared/config/logger.js'
 
 // ─────────────────────────────────────────────────────────────
 // Podara — App Entry Point
@@ -25,7 +25,7 @@ const fastify = Fastify({
 
 // ── Fastify Logger ──────────────────────────────────────────
 
-await fastify.register(httpLogger);
+await fastify.register(httpLogger)
 
 // ── Bootstrap ─────────────────────────────────────────────────
 
@@ -93,20 +93,20 @@ const start = async () => {
     })
 
     // ── Start ──────────────────────────────────────────────────
-    const port = Number(process.env.PORT) || 3000;
-    await fastify.listen({ port, host: "0.0.0.0" });
+    const port = Number(process.env.PORT) || 3000
+    await fastify.listen({ port, host: '0.0.0.0' })
 
     fastify.log.info(
-      { port, environment: process.env.NODE_ENV ?? "development" },
+      { port, environment: process.env.NODE_ENV ?? 'development' },
       `🚀 Podara backend running`,
-    );
+    )
 
     if (!isProd) {
-      fastify.log.info(`📖 Swagger docs → http://localhost:${port}/docs`);
+      fastify.log.info(`📖 Swagger docs → http://localhost:${port}/docs`)
     }
   } catch (err) {
-    fastify.log.fatal({ err }, "Failed to start server");
-    process.exit(1);
+    fastify.log.fatal({ err }, 'Failed to start server')
+    process.exit(1)
   }
 }
 
@@ -114,17 +114,17 @@ const start = async () => {
 // Ensures in-flight requests complete before process exits
 
 const shutdown = async (signal: string) => {
-  fastify.log.info({ signal }, "Shutdown signal received");
-  await fastify.close();
-  fastify.log.info("Server closed — goodbye");
-  process.exit(0);
-};
+  fastify.log.info({ signal }, 'Shutdown signal received')
+  await fastify.close()
+  fastify.log.info('Server closed — goodbye')
+  process.exit(0)
+}
 
-process.on("SIGTERM", () => {
-  void shutdown("SIGTERM");
-});
-process.on("SIGINT", () => {
-  void shutdown("SIGINT");
-});
+process.on('SIGTERM', () => {
+  void shutdown('SIGTERM')
+})
+process.on('SIGINT', () => {
+  void shutdown('SIGINT')
+})
 
-start();
+start()

@@ -6,11 +6,12 @@
   "main": "index.js",
   "scripts": {
     "dev": "node --loader ts-node/esm src/index.ts",
-    "build": "rimraf dist && tsc",
+    "build": "rimraf dist && prettier --write . && prettier --check . && tsc",
     "start": "node dist/src/index.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "check": "npm run lint && npm run build",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

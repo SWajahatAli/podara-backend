@@ -5,3 +5,7 @@ node_modules
 /generated/prisma
 dist/
 node_modules/
+.DS_Store
+**/.DS_Store
+logs/*
+/logs/*

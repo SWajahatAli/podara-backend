@@ -1,6 +1,6 @@
-import path from "path";
-import fs from "fs";
-import type { PinoLoggerOptions } from "fastify/types/logger.js";
+import path from 'path'
+import fs from 'fs'
+import type { PinoLoggerOptions } from 'fastify/types/logger.js'
 
 // ─────────────────────────────────────────────────────────────
 // Podara — Logger Configuration
@@ -12,11 +12,11 @@ import type { PinoLoggerOptions } from "fastify/types/logger.js";
 //   trace → debug → info → warn → error → fatal
 // ─────────────────────────────────────────────────────────────
 
-export const logsDir = path.join(process.cwd(), "logs");
+export const logsDir = path.join(process.cwd(), 'logs')
 
 // Ensure logs directory exists before Fastify boots
 if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
+  fs.mkdirSync(logsDir, { recursive: true })
 }
 
 // ── Serializers ───────────────────────────────────────────────
@@ -26,12 +26,12 @@ if (!fs.existsSync(logsDir)) {
 export const logSerializers = {
   // Serialize only what matters from the request — never log auth headers or body
   req(request: {
-    method: string;
-    url: string;
-    hostname: string;
-    remoteAddress: string;
-    remotePort: number;
-    headers: Record<string, string | string[] | undefined>;
+    method: string
+    url: string
+    hostname: string
+    remoteAddress: string
+    remotePort: number
+    headers: Record<string, string | string[] | undefined>
   }) {
     return {
       method: request.method,
@@ -39,16 +39,16 @@ export const logSerializers = {
       hostname: request.hostname,
       remoteAddress: request.remoteAddress,
       remotePort: request.remotePort,
-      userAgent: request.headers["user-agent"] ?? "unknown",
+      userAgent: request.headers['user-agent'] ?? 'unknown',
       // Never log: Authorization, Cookie, body — sensitive data
-    };
+    }
   },
 
   // Serialize only status code from response — timing comes from hook
   res(reply: { statusCode: number }) {
     return {
       statusCode: reply.statusCode,
-    };
+    }
   },
 
   // Serialize errors with full stack in dev, minimal in prod
@@ -56,12 +56,12 @@ export const logSerializers = {
     return {
       type: error.constructor.name,
       message: error.message,
-      code: error.code ?? "UNKNOWN",
+      code: error.code ?? 'UNKNOWN',
       statusCode: error.statusCode,
       stack: error.stack,
-    };
+    }
   },
-};
+}
 
 // ── Development Logger ─────────────────────────────────────────
 // Pretty printed, colorized, all levels, dual output:
@@ -69,34 +69,34 @@ export const logSerializers = {
 // → logs/dev.log (raw for searching)
 
 export const devLogger: PinoLoggerOptions = {
-  level: "debug",
+  level: 'debug',
   serializers: logSerializers,
   transport: {
     targets: [
       {
-        target: "pino-pretty",
-        level: "debug",
+        target: 'pino-pretty',
+        level: 'debug',
         options: {
           colorize: true,
-          translateTime: "SYS:yyyy-mm-dd HH:MM:ss.l", // includes milliseconds
-          ignore: "pid,hostname",
-          messageFormat: "{msg}",
-          errorLikeObjectKeys: ["err", "error"],
-          errorProps: "type,message,code,statusCode,stack",
+          translateTime: 'SYS:yyyy-mm-dd HH:MM:ss.l', // includes milliseconds
+          ignore: 'pid,hostname',
+          messageFormat: '{msg}',
+          errorLikeObjectKeys: ['err', 'error'],
+          errorProps: 'type,message,code,statusCode,stack',
           singleLine: false,
         },
       },
       {
-        target: "pino/file",
-        level: "debug",
+        target: 'pino/file',
+        level: 'debug',
         options: {
-          destination: path.join(logsDir, "dev.log"),
+          destination: path.join(logsDir, 'dev.log'),
           mkdir: true,
         },
       },
     ],
   },
-};
+}
 
 // ── Production Logger ──────────────────────────────────────────
 // Structured JSON, split by severity:
@@ -106,28 +106,28 @@ export const devLogger: PinoLoggerOptions = {
 // JSON format is compatible with Datadog, Logtail, Grafana Loki
 
 export const prodLogger: PinoLoggerOptions = {
-  level: "info",
+  level: 'info',
   serializers: logSerializers,
   transport: {
     targets: [
       {
-        target: "pino/file",
-        level: "warn",
+        target: 'pino/file',
+        level: 'warn',
         options: {
-          destination: path.join(logsDir, "error.log"),
+          destination: path.join(logsDir, 'error.log'),
           mkdir: true,
           sync: false, // async write — no I/O blocking
         },
       },
       {
-        target: "pino/file",
-        level: "info",
+        target: 'pino/file',
+        level: 'info',
         options: {
-          destination: path.join(logsDir, "combined.log"),
+          destination: path.join(logsDir, 'combined.log'),
           mkdir: true,
           sync: false,
         },
       },
     ],
   },
-};
+}
