@@ -9,6 +9,8 @@ import path from 'path'
 import type { PinoLoggerOptions } from 'fastify/types/logger.js'
 import httpLogger from './plugins/request.logger.js'
 import { devLogger, prodLogger } from './shared/config/logger.js'
+import { ApiResponseBuilder } from './shared/response/index.js'
+import { globalErrorHandler } from './shared/errors/error_handler.js'
 
 // ─────────────────────────────────────────────────────────────
 // Podara — App Entry Point
@@ -69,28 +71,42 @@ const start = async () => {
     // ── 404 Handler ────────────────────────────────────────────
 
     fastify.setNotFoundHandler((request, reply) => {
-      reply.code(404).send({
-        statusCode: 404,
-        error: 'Not Found',
-        message: `Route ${request.method} ${request.url} not found.`,
-      })
+      request.log.warn({ method: request.method, url: request.url }, 'Route not found')
+
+      void reply
+        .code(404)
+        .send(
+          ApiResponseBuilder.error(
+            `Route ${request.method} ${request.url} not found.`,
+            404,
+            'ROUTE_NOT_FOUND',
+            request.id,
+          ),
+        )
     })
 
     // ── Global Error Handler ───────────────────────────────────
 
     fastify.setErrorHandler((error: FastifyError, request, reply) => {
-      fastify.log.error({
+      request.log.error({
         err: error,
         url: request.url,
         method: request.method,
       })
 
-      reply.code(error.statusCode ?? 500).send({
-        statusCode: error.statusCode ?? 500,
-        error: 'Internal Server Error',
-        message: isProd ? 'Something went wrong.' : error.message,
-      })
+      reply
+        .code(error.statusCode ?? 500)
+        .send(
+          ApiResponseBuilder.error(
+            isProd ? 'Something went wrong.' : error.message,
+            500,
+            'INTERNAL_SERVER_ERROR',
+          ),
+        )
     })
+ 
+    // ── Global Error Handler ───────────────────────────────────
+    fastify.setErrorHandler(globalErrorHandler)
 
     // ── Start ──────────────────────────────────────────────────
     const port = Number(process.env.PORT) || 3000
