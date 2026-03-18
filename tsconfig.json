@@ -43,12 +43,6 @@
     "moduleDetection": "force",
     "skipLibCheck": true
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "prisma/**/*.ts",
-    "**/*.ts",
-    "**/*.tsx"
-  ],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "prisma/**/*.ts", "**/*.ts", "**/*.tsx"],
   "exclude": ["dist", "node_modules", "**/*.test.ts", "**/*.spec.ts"]
 }
