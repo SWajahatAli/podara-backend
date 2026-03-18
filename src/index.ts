@@ -11,6 +11,7 @@ import httpLogger from './plugins/request.logger.js'
 import { devLogger, prodLogger } from './shared/config/logger.js'
 import { ApiResponseBuilder } from './shared/response/index.js'
 import { globalErrorHandler } from './shared/errors/error_handler.js'
+import { registerSwagger } from './shared/config/swagger.js'
 
 // ─────────────────────────────────────────────────────────────
 // Podara — App Entry Point
@@ -23,6 +24,12 @@ const isProd = process.env.NODE_ENV === 'production'
 const fastify = Fastify({
   logger: isProd ? prodLogger : devLogger,
   trustProxy: true, // Required for Railway — gets real IP behind proxy
+  ajv: {
+    customOptions: {
+      strict: 'log', // warn instead of throw on unknown keywords
+      keywords: ['example'], // explicitly allow 'example' annotation
+    },
+  },
 })
 
 // ── Fastify Logger ──────────────────────────────────────────
@@ -33,6 +40,11 @@ await fastify.register(httpLogger)
 
 const start = async () => {
   try {
+    // ── Swagger — must register BEFORE routes ──────────────────
+    if (!isProd) {
+      await registerSwagger(fastify)
+    }
+
     // ── Plugins ────────────────────────────────────────────────
 
     await fastify.register(cors, {
@@ -104,7 +116,7 @@ const start = async () => {
           ),
         )
     })
- 
+
     // ── Global Error Handler ───────────────────────────────────
     fastify.setErrorHandler(globalErrorHandler)
 

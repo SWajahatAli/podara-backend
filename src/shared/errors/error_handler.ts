@@ -1,6 +1,6 @@
 import type { FastifyError, FastifyRequest, FastifyReply } from 'fastify'
 import { AppError } from './app_error.js'
-import { ValidationError } from './http_error.js';
+import { ValidationError } from './http_error.js'
 import { ApiResponseBuilder } from '../response/api_response.js'
 import { Prisma } from '../../../generated/prisma/index.js'
 
